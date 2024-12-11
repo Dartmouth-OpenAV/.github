@@ -10,4 +10,4 @@ Here's a script to instantiate an quick OpenAV stack on your laptop, cloud serve
 
 [quickstart.sh](https://raw.githubusercontent.com/Dartmouth-OpenAV/.github/refs/heads/main/quickstart.sh)
 
-For the moment, it does not load a User Interface to interact with, it stops at the [Orchestrator](https://github.com/Dartmouth-OpenAV/orchestrator), and so you would interact with it using its (collection of web requests)[https://raw.githubusercontent.com/Dartmouth-OpenAV/orchestrator/refs/heads/main/orchestrator.collection.json] (with apps like Insomnia or PostMan).
+For the moment, it does not load a User Interface to interact with, it stops at the [Orchestrator](https://github.com/Dartmouth-OpenAV/orchestrator), and so you would interact with it using its [collection of web requests](https://raw.githubusercontent.com/Dartmouth-OpenAV/orchestrator/refs/heads/main/orchestrator.collection.json) (with apps like Insomnia or PostMan).
