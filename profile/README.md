@@ -6,5 +6,6 @@ Taking an IT-driven approach to AV, OpenAV uses **JSON** configuration files to 
 
 ## Quickstart
 
-Here's a script that can instantiate an OpenAV stack on your laptop, cloud server, Raspberry Pi or other. [Docker](https://docs.docker.com/engine/install/) is required to run it as OpenAV relies heavily on it.
+Here's a script that can instantiate an OpenAV stack on your laptop, cloud server, Raspberry Pi or other. You'll need a terminal, Bash, and Docker [Docker](https://docs.docker.com/engine/install/).
 
+[quickstart.sh](https://raw.githubusercontent.com/Dartmouth-OpenAV/.github/refs/heads/main/quickstart.sh)
