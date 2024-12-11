@@ -72,15 +72,19 @@ docker swarm init 2>/dev/null
 docker network create -d overlay --attachable openav 2>/dev/null
 
 echo -e "> do you want to:"
-echo -e ">    1. load all possible OpenAV microservices to talk with all supported AV devices?"
-echo -e ">         this will take a few more minutes to retrieve and instantiate everything, but you'll have the whole array device make & models supported by OpenAV available"
-echo -e ">    2. pick and choose which microservices to load"
+echo -e "    1. load a simple stack with a simple config to interact with a PJLink projector"
+echo -e "    2. load all possible OpenAV microservices to talk with all supported AV devices"
+echo -e "         this will take a few more minutes to retrieve and instantiate everything, but you'll have the whole array device make & models supported by OpenAV available"
+echo -e "    3. pick and choose which microservices to load"
 
-read_input_with_choices "1" "2"
+read_input_with_choices "1" "2" "3"
 
 echo -e "> microservices"
 microservices="microservice-biamp-tesira-dsp microservice-crestron-dm-switcher microservice-global-cache microservice-kramer-switcher microservice-nec-display microservice-pjlink microservice-qsc-core-dsp microservice-roku microservice-rs232-extron microservice-shure-dsp microservice-sony-fpd microservice-visca-ip microservice-zoom-room-cli"
-if [ "$selection" == "2" ]
+if [ "$selection" == "1" ]
+then
+    microservices="microservice-pjlink"
+elif [ "$selection" == "3" ]
 then
     $new_microservices = ""
     for microservice in $microservices
@@ -108,21 +112,36 @@ do
     echo -en "\033[2K\033[1G   ${i}/${count} ${MAGENTA}$microservice${RESET} ..."
     docker stop $microservice > /dev/null 2>&1
     docker rm $microservice > /dev/null 2>&1
-    docker pull ghcr.io/dartmouth-openav/$microservice:latest$architecture > /dev/null 2>&1
-    docker run -tdi --restart unless-stopped --network openav --network-alias $microservice --name $microservice `docker inspect --format '{{ index .Config.Labels "CONTAINER_LAUNCH_EXTRA_PARAMETERS"}}' ghcr.io/dartmouth-openav/$microservice:latest$architecture` ghcr.io/dartmouth-openav/$microservice:latest$architecture > /dev/null 2>&1
+    docker pull ghcr.io/dartmouth-openav/$microservice:production$architecture > /dev/null 2>&1
+    docker run -tdi --restart unless-stopped --network openav --network-alias $microservice --name $microservice `docker inspect --format '{{ index .Config.Labels "CONTAINER_LAUNCH_EXTRA_PARAMETERS"}}' ghcr.io/dartmouth-openav/$microservice:production$architecture` ghcr.io/dartmouth-openav/$microservice:production$architecture > /dev/null 2>&1
     i=$((i+1))
 done
 echo -e ""
 
-echo -e "> do you want to:"
-echo -e ">    1. create a default system configuration directory with a sample"
-echo -e ">    2. specify an existing directory with system configurations"
-
-read_input_with_choices "1" "2"
-
 
 if [ "$selection" == "1" ]
 then
+    echo "> what is the IP or FQDN of the projector you want to interact with?"
+    read projector
+    if ! nc -z $projector 4352 2>/dev/null
+    then
+        echo -e ">   ${RED}unreachable${RESET}"
+        echo -e "I couldn't open a socker to $projector on tcp:4352. Might be routing, might be firewalling, impossible to tell from here. Please make sure that the network you are on allows you to talk to this projector and try again."
+        exit 1
+    else
+        echo -e ">   ${GREEN}ok${RESET}"
+    fi
+
+    projectorcreds=""
+    echo "> is PJlink configured with a password on this projector?"
+    read_input_with_choices "y" "n"
+    if [ "$selection" == "y" ]
+    then
+        echo "> please input that password"
+        read projectorcreds
+        projectorcreds=":$projectorcreds@"
+    fi
+
     if [ ! -d ~/"OpenAV_system_configurations" ]
     then
         echo -e "> creating system configuration directory ~/OpenAV_system_configurations"
@@ -133,14 +152,31 @@ then
             exit 1
         fi
     fi
-    ls ~/"OpenAV_system_configurations"/*.json > /dev/null 2>&1
-    if [ $? -eq 1 ]
-    then
-        # put sample in here
-        echo "Hi Jane, I'm actually not putting a sample but you can create JSON files in:" ~/"OpenAV_system_configurations"
-    fi
+    cat << EOF > ~/"OpenAV_system_configurations/test_123.json"
+{
+    "name": "Projector",
+    "power": {
+        "set": [
+            {
+                "driver": "ghcr.io/dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power",
+                "method": "PUT",
+                "body": "\"$on_or_off\"",
+                "headers": ["content-type: application/json"]
+            }
+        ],
+        "set_process": {
+            "true" : {"on_or_off": "on" },
+            "false": {"on_or_off": "off"}
+        },
+        "get": [
+            "ghcr.io/dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power"
+        ],
+        "get_process": ["on"]
+    }
+}
+EOF
     system_configs_folder=~/"OpenAV_system_configurations"
-else # selection was 2
+else
     echo -e "> please enter the folder containing system configurations: (in MacOS you can drag & drop a folder on the terminal)"
     read system_configs_folder
     while [ ! -d $system_configs_folder ]
@@ -153,7 +189,7 @@ fi
 echo -e "> instantiating orchestrator"
 docker stop orchestrator > /dev/null 2>&1
 docker rm orchestrator > /dev/null 2>&1
-docker pull ghcr.io/dartmouth-openav/orchestrator:latest$architecture > /dev/null 2>&1
+docker pull ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
 echo -e ">   finding available port"
 for port in $(seq 80 65535)
 do
@@ -174,5 +210,7 @@ docker run -tdi \
     --network openav \
     --network-alias orchestrator \
     --name orchestrator \
-    ghcr.io/dartmouth-openav/orchestrator:latest$architecture > /dev/null 2>&1
+    ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
 docker exec -ti orchestrator sh -c 'echo \* > /authorization.json'
+
+echo "> orchestrator available at: http://localhost:$port"
