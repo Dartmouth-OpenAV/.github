@@ -160,7 +160,7 @@ then
             {
                 "driver": "ghcr.io/dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power",
                 "method": "PUT",
-                "body": "\"$on_or_off\"",
+                "body": "\"\$on_or_off\"",
                 "headers": ["content-type: application/json"]
             }
         ],
