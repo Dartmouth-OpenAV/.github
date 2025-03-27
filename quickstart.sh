@@ -72,7 +72,7 @@ docker swarm init 2>/dev/null
 docker network create -d overlay --attachable openav 2>/dev/null
 
 echo -e "> do you want to:"
-echo -e "    1. load a simple stack with a simple config to interact with a PJLink projector"
+echo -e "    1. load a simple OpenAV stack with small config to interact with a PJLink projector"
 echo -e "    2. load all possible OpenAV microservices to talk with all supported AV devices"
 echo -e "         this will take a few more minutes to retrieve and instantiate everything, but you'll have the whole array device make & models supported by OpenAV available"
 echo -e "    3. pick and choose which microservices to load"
@@ -126,7 +126,7 @@ then
     if ! nc -z -w 3 -G 3 $projector 4352 2>/dev/null
     then
         echo -e ">   ${RED}unreachable${RESET}"
-        echo -e "I couldn't open a socker to $projector on tcp:4352. Might be routing, might be firewalling, impossible to tell from here. Please make sure that the network you are on allows you to talk to this projector and try again."
+        echo -e "I couldn't open a socket to $projector on tcp:4352. Might be routing, might be firewalling, impossible to tell from here. Maybe the PJLink protocol is disabled in the settings? Please make sure that the network you are on allows you to talk to this projector and try again."
         exit 1
     else
         echo -e ">   ${GREEN}ok${RESET}"
@@ -154,25 +154,217 @@ then
     fi
     cat << EOF > ~/"OpenAV_system_configurations/test_123.json"
 {
-    "name": "Projector",
-    "power": {
-        "set": [
-            {
-                "driver": "ghcr.io/dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power",
+  "system_name": "OpenAV Test",
+  "control_sets": {
+    "flat_panel": {
+      "name": "TV",
+      "icon": "screen",
+      "controls": {
+        "input_select": {
+          "type": "display_source_radio",
+          "channel": "main",
+          "default_input": "hdmi",
+          "options": {
+            "input_1": {
+              "icon": "usb-c",
+              "name": "Input 1",
+              "value": {
+                "set": [
+                  {
+                    "headers": [
+                      "content-type: application/json"
+                    ],
+                    "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1",
+                    "method": "PUT",
+                    "body": "1"
+                  }
+                ],
+                "get": [
+                  "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1"
+                ],
+                "get_process": [
+                  "1"
+                ],
+                "set_process": ""
+              }
+            },
+            "input_2": {
+              "icon": "hdmi",
+              "name": "Input 2",
+              "value": {
+                "set": [
+                  {
+                    "headers": [
+                      "content-type: application/json"
+                    ],
+                    "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1",
+                    "method": "PUT",
+                    "body": "2"
+                  }
+                ],
+                "get": [
+                  "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1"
+                ],
+                "get_process": [
+                  "2"
+                ],
+                "set_process": ""
+              }
+            },
+            "input_3": {
+              "icon": "laptop",
+              "name": "Input 3",
+              "value": {
+                "set": [
+                  {
+                    "headers": [
+                      "content-type: application/json"
+                    ],
+                    "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1",
+                    "method": "PUT",
+                    "body": "3"
+                  }
+                ],
+                "get": [
+                  "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1"
+                ],
+                "get_process": [
+                  "3"
+                ],
+                "set_process": ""
+              }
+            }
+          }
+        },
+        "pause": {
+            "type": "video_mute",
+            "channel": "screen_center",
+            "value": {
+                "set": [
+                    {
+                        "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audioandvideomute/1",
+                        "method": "PUT",
+                        "body": "\"\$on_or_off\"",
+                        "headers": [
+                            "content-type: application/json"
+                        ]
+                    }
+                ],
+                "set_process": {
+                    "true": {
+                        "on_or_off": "on"
+                    },
+                    "false": {
+                        "on_or_off": "off"
+                    }
+                },
+                "get": [
+                    "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audioandvideomute/1"
+                ],
+                "get_process": [
+                    "on"
+                ]
+            }
+        },
+        "power": {
+          "type": "power",
+          "name": "Power",
+          "channel": "main",
+          "value": {
+            "set": [
+              {
+                "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power",
                 "method": "PUT",
                 "body": "\"\$on_or_off\"",
-                "headers": ["content-type: application/json"]
-            }
-        ],
-        "set_process": {
-            "true" : {"on_or_off": "on" },
-            "false": {"on_or_off": "off"}
+                "headers": [
+                  "content-type: application/json"
+                ]
+              }
+            ],
+            "set_process": {
+              "true": {
+                "on_or_off": "on"
+              },
+              "false": {
+                "on_or_off": "off"
+              }
+            },
+            "get": [
+              "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power"
+            ],
+            "get_process": [
+              "on"
+            ]
+          }
+        }
+      }
+    },
+    "audio": {
+      "name": "Sound",
+      "icon": "speaker",
+      "display_options" : {
+        "half_width" : true
+      },
+      "controls": {
+        "mute": {
+          "type": "mute",
+          "channel": "audio",
+          "value": {
+            "set": [
+              {
+                "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audiomute/1",
+                "method": "PUT",
+                "body": "\"\$PROGRAM_MUTE\"",
+                "headers": [
+                  "content-type: application/json"
+                ]
+              }
+            ],
+            "set_process": {
+              "true": {
+                "PROGRAM_MUTE": "true"
+              },
+              "false": {
+                "PROGRAM_MUTE": "false"
+              }
+            },
+            "get": [
+              "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audiomute/1"
+            ],
+            "get_process": [
+              "true"
+            ]
+          }
         },
-        "get": [
-            "ghcr.io/dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/power"
-        ],
-        "get_process": ["on"]
+        "stateless_volume": {
+            "type": "stateless_volume",
+            "channel": "program",
+            "value": {
+                "set": [
+                    {
+                        "driver": "microservice-pjlink:current/$projectorcreds$projector/volume",
+                        "method": "PUT",
+                        "body": "\"\$up_or_down\"",
+                        "headers": [
+                            "content-type: application/json"
+                        ]
+                    }
+                ],
+                "set_process": {
+                    "up": {
+                        "up_or_down": "up"
+                    },
+                    "down": {
+                        "up_or_down": "down"
+                    }
+                },
+                "get": [],
+                "get_process": ""
+            }
+        }
+      }
     }
+  }
 }
 EOF
     system_configs_folder=~/"OpenAV_system_configurations"
@@ -191,17 +383,17 @@ docker stop orchestrator > /dev/null 2>&1
 docker rm orchestrator > /dev/null 2>&1
 docker pull ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
 echo -e ">   finding available port"
-for port in $(seq 80 65535)
+for orchestrator_port in $(seq 81 65535)
 do
-    echo -e ">     $port"
-    if ! nc -z -w 3 -G 3 localhost $port 2>/dev/null
+    echo -e ">     $orchestrator_port"
+    if ! nc -z -w 3 -G 3 localhost $orchestrator_port 2>/dev/null
     then
         break
     fi
 done
 docker run -tdi \
     --restart unless-stopped \
-    -p $port:80 \
+    -p $orchestrator_port:80 \
     -e DNS_HARD_CACHE=false \
     -e SYSTEM_CONFIGURATIONS_VIA_VOLUME=true \
     -e SYSTEM_CONFIGURATIONS_INSTANT_REFRESH=true \
@@ -213,4 +405,33 @@ docker run -tdi \
     ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
 docker exec -ti orchestrator sh -c 'echo \* > /authorization.json'
 
-echo "> orchestrator available at: http://localhost:$port"
+echo -e "> instantiating UI"
+docker stop frontend-web > /dev/null 2>&1
+docker rm frontend-web > /dev/null 2>&1
+docker pull ghcr.io/dartmouth-openav/frontend-web:production$architecture > /dev/null 2>&1
+echo -e ">   finding available port"
+for ui_port in $(seq 80 65535)
+do
+    echo -e ">     $ui_port"
+    if ! nc -z -w 3 -G 3 localhost $ui_port 2>/dev/null
+    then
+        break
+    fi
+done
+docker run -tdi \
+    --restart unless-stopped \
+    -p $ui_port:80 \
+    -e HOME_ORCHESTRATOR=http://localhost:$orchestrator_port \
+    --network openav \
+    --network-alias frontend-web \
+    --name frontend-web \
+    ghcr.io/dartmouth-openav/frontend-web:production$architecture > /dev/null 2>&1
+
+ui_port_if_not_80=""
+if [ "$ui_port" != "80" ]
+then
+    ui_port_if_not_80=":$ui_port"
+fi
+
+echo "> orchestrator available at: http://localhost:$orchestrator_port"
+echo "> UI available at: http://localhost$ui_port_if_not_80?system=test_123"
