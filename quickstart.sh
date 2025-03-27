@@ -11,6 +11,7 @@ CYAN="\033[36m"
 WHITE="\033[37m"
 RESET="\033[0m"
 
+current_ip=$(hostname -I | awk '{print $1}')
 
 read_input_with_choices() {
     local choices="$@"
@@ -386,7 +387,7 @@ echo -e ">   finding available port"
 for orchestrator_port in $(seq 81 65535)
 do
     echo -e ">     $orchestrator_port"
-    if ! nc -z -w 3 -G 4 localhost $orchestrator_port 2>/dev/null
+    if ! nc -z -w 3 -G 4 $current_ip $orchestrator_port 2>/dev/null
     then
         break
     fi
@@ -413,7 +414,7 @@ echo -e ">   finding available port"
 for ui_port in $(seq 80 65535)
 do
     echo -e ">     $ui_port"
-    if ! nc -z -w 3 -G 4 localhost $ui_port 2>/dev/null
+    if ! nc -z -w 3 -G 4 $current_ip $ui_port 2>/dev/null
     then
         break
     fi
@@ -421,7 +422,7 @@ done
 docker run -tdi \
     --restart unless-stopped \
     -p $ui_port:80 \
-    -e HOME_ORCHESTRATOR=http://localhost:$orchestrator_port \
+    -e HOME_ORCHESTRATOR=http://$current_ip:$orchestrator_port \
     --network openav \
     --network-alias frontend-web \
     --name frontend-web \
@@ -433,5 +434,7 @@ then
     ui_port_if_not_80=":$ui_port"
 fi
 
-echo "> orchestrator available at: http://localhost:$orchestrator_port"
-echo "> UI available at: http://localhost$ui_port_if_not_80?system=test_123"
+echo "> orchestrator available at: http://$current_ip:$orchestrator_port"
+echo "> ...or http://localhost:$orchestrator_port"
+echo "> UI available at: http://$current_ip$ui_port_if_not_80?system=test_123"
+echo "> ...or http://localhost:$ui_port_if_not_80?system=test_123"
