@@ -123,7 +123,7 @@ if [ "$selection" == "1" ]
 then
     echo "> what is the IP or FQDN of the projector you want to interact with?"
     read projector
-    if ! nc -z -w 3 -G 3 $projector 4352 2>/dev/null
+    if ! nc -z -w 3 -G 4 $projector 4352 2>/dev/null
     then
         echo -e ">   ${RED}unreachable${RESET}"
         echo -e "I couldn't open a socket to $projector on tcp:4352. Might be routing, might be firewalling, impossible to tell from here. Maybe the PJLink protocol is disabled in the settings? Please make sure that the network you are on allows you to talk to this projector and try again."
@@ -386,7 +386,7 @@ echo -e ">   finding available port"
 for orchestrator_port in $(seq 81 65535)
 do
     echo -e ">     $orchestrator_port"
-    if ! nc -z -w 3 -G 3 localhost $orchestrator_port 2>/dev/null
+    if ! nc -z -w 3 -G 4 localhost $orchestrator_port 2>/dev/null
     then
         break
     fi
@@ -413,7 +413,7 @@ echo -e ">   finding available port"
 for ui_port in $(seq 80 65535)
 do
     echo -e ">     $ui_port"
-    if ! nc -z -w 3 -G 3 localhost $ui_port 2>/dev/null
+    if ! nc -z -w 3 -G 4 localhost $ui_port 2>/dev/null
     then
         break
     fi
