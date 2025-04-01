@@ -4,9 +4,11 @@ OpenAV is an audiovisual control system developed at [Dartmouth College](https:/
 
 Taking an IT-driven approach to AV, OpenAV uses **JSON** configuration files to manage system setups. Each component is a **Docker** image, and they talk to each other via **REST APIs**. Communication with AV devices is handled via TCP/IP, and control interfaces are built with standard HTML, CSS, and JavaScript. Whenever possible, Ethernet is utilized for control and power (PoE). The project also includes a web-based dashboard for system monitoring.
 
+For more information, check out our [wiki](https://github.com/Dartmouth-OpenAV/.github/wiki).
+
 ## Quickstart
 
-Here's a script to instantiate an quick OpenAV stack on your laptop, cloud server, Raspberry Pi or other. You'll need a terminal, Bash, and Docker [Docker](https://docs.docker.com/engine/install/).
+Here's a script to instantiate a quick OpenAV stack on your laptop, cloud server, Raspberry Pi or other. You'll need a terminal, Bash, and Docker [Docker](https://docs.docker.com/engine/install/).
 
 [quickstart.sh](https://raw.githubusercontent.com/Dartmouth-OpenAV/.github/refs/heads/main/quickstart.sh)
 
