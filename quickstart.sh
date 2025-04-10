@@ -385,6 +385,8 @@ EOF
             # echo -e "   (${BOLD}n${RESET})o"
             read_input_with_choices "y" "n"
             want_to_define_another_input=$selection
+            echo -e "sleeping for 60 seconds before scanning projector again"
+            sleep 60
         done
     elif [ "$selection" == "2" ]
     then
