@@ -126,7 +126,7 @@ fi
 netcat_options=""
 if [ "`uname -s`" == "Darwin" ];
 then
-    netcat_options = " -G 3 "
+    netcat_options=" -G 3 "
 fi
 
 echo -e "> creating openav Docker network"
