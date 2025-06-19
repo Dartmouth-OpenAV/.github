@@ -43,6 +43,102 @@ echo -e "  \___/| .__/ \___|_| |_/_/   \_\_/    "
 echo -e "       |_|                             "
 echo -e ""
 
+interactive=1
+orchestrator_deploy_args=""
+if [ ! -z "$1" ]
+then
+    if [ "$1" = "deploy" ]
+    then
+        interactive=0
+
+        # reading arguments then
+        while [[ $# -gt 0 ]]
+        do
+            key="$1"
+            case $key in
+            *=*)
+                name="${key%=*}"
+                value="${key#*=}"
+                eval "$name=\"$value\""
+                shift
+                ;;
+            deploy)
+                shift
+                ;;
+            *)
+                echo "error: argument $1 is missing assignment"
+                exit 1
+                ;;
+            esac
+        done
+
+        # argument sanity checking & orchestrator launch command build
+        if [ "$system_configs_method" == "volume" ]
+        then
+            if [ -z $system_configs_volume ]
+            then
+                echo -e "error: need to specify \"system_configs_volume\" argument when using system_configs_method of \"volume\"" ;
+                exit 1
+            fi
+            if [ ! -d $system_configs_volume ]
+            then
+                echo -e "error: ${system_configs_volume} isn't a valid directory" ;
+                exit 1
+            fi
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_VIA_VOLUME=true"
+            orchestrator_deploy_args+=" -v ${system_configs_volume}:/system_configurations"
+        elif [ "$system_configs_method" == "github_token" ]
+        then
+            if [ -z $system_configs_github_token ]
+            then
+                echo -e "error: need to specify \"system_configs_github_token\" argument when using system_configs_method of \"github_token\"" ;
+                exit 1
+            fi
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_TOKEN=${system_configs_github_token}"
+        elif [ "$system_configs_method" == "github_app" ]
+        then
+            if [ -z $system_configs_github_app_installation_id -o -z $system_configs_github_app_client_id -o -z $system_configs_github_app_pem ]
+            then
+                echo -e "error: need to specify \"system_configs_github_app_installation_id\", \"system_configs_github_app_client_id\", and \"system_configs_github_app_pem\" arguments when using system_configs_method of \"github_app\"" ;
+                exit 1
+            fi
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_INSTALLATION_ID=${system_configs_github_app_installation_id}"
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_CLIENT_ID=${system_configs_github_app_client_id}"
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_PEM=${system_configs_github_app_pem }"
+        else
+            echo -e "error: need to specify \"system_configs_method\" argument, can be one of \"volume\", \"github_token\", or \"github_app\"" ;
+            exit 1
+        fi
+
+        orchestrator_deploy_args+=" -e LOG_ERRORS=true"
+        if [ "$log_to_splunk" == "true" ]
+        then
+            if [ -z $log_to_splunk_url -o -z $log_to_splunk_key -o -z $log_to_splunk_index ]
+            then
+                echo -e "error: need to specify \"system_configs_github_app_installation_id\", \"log_to_splunk_key\", and \"log_to_splunk_index\" arguments when log_to_splunk is \"true\"" ;
+                exit 1
+            fi
+            orchestrator_deploy_args+=" -e LOG_TO_SPLUNK_URL=${log_to_splunk_url}"
+            orchestrator_deploy_args+=" -e LOG_TO_SPLUNK_KEY=${log_to_splunk_key}"
+            orchestrator_deploy_args+=" -e LOG_TO_SPLUNK_INDEX=${log_to_splunk_index }"
+        fi
+
+        which timedatectl > /dev/null
+        if [ $? -eq 0 ]
+        then
+            tz="`timedatectl status | grep "Time zone" | cut -d ":" -f2 | cut -d" " -f2`"
+            if [ ! -z $tz ]
+            then
+                orchestrator_deploy_args+=" -e TZ=${tz}"
+            fi
+        fi
+    else
+        echo -e "error: first argument to non-interactive invocation has to be \"deploy\""
+        exit 1
+    fi
+fi
+
+
 echo -e "> raspi64 architecture?"
 architecture=""
 if [ "`uname -m`" = "aarch64" ]
@@ -58,32 +154,41 @@ which docker > /dev/null
 if [ $? -eq 1 ]
 then
     echo -e ">   ${RED}not installed${RESET}"
+    install_docker=0
     if [ "$architecture" == "_raspi64" ]
     then
-        echo ">      looks like we're running off a Pi, do you want to install Docker automatically?"
-        read_input_with_choices "y" "n"
-        if [ "$selection" == "y" ]
+        if [ $interactive -eq 1 ]
         then
-            # instructions retrieved from: https://docs.docker.com/engine/install/debian/
-            sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install ca-certificates curl -y
-            sudo install -m 0755 -d /etc/apt/keyrings
-            sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
-            sudo chmod a+r /etc/apt/keyrings/docker.asc
-            echo \
-              "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-              $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-              sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-            sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-ce-cli -y
-            which docker > /dev/null
-            if [ $? -eq 1 ]
+            echo ">      looks like we're running off a Pi, do you want to install Docker automatically?"
+            read_input_with_choices "y" "n"
+            if [ "$selection" == "y" ]
             then
-                echo -e "error: looks like I was unable to install Docker automatically, please install it manually before running this script: https://docs.docker.com/engine/install/"
-                exit 1
+                install_docker=1
             fi
-        else
-            echo -e "error: Docker is needed, please install it before running this script: https://docs.docker.com/engine/install/"
+        elif [ "$auto_install_docker" == "true" ]
+        then
+            install_docker=1
+        fi
+    fi
+
+    if [ $install_docker -eq 1 ]
+    then
+        # instructions retrieved from: https://docs.docker.com/engine/install/debian/
+        sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install ca-certificates curl -y
+        sudo install -m 0755 -d /etc/apt/keyrings
+        sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+        sudo chmod a+r /etc/apt/keyrings/docker.asc
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install docker-ce docker-ce-cli -y
+        which docker > /dev/null
+        if [ $? -eq 1 ]
+        then
+            echo -e "error: looks like I was unable to install Docker automatically, please install it manually before running this script: https://docs.docker.com/engine/install/"
             exit 1
         fi
     else
@@ -99,14 +204,42 @@ then
     sudo_docker="sudo"
 fi
 
+echo -e "> checking that Docker is up & running"
+$sudo_docker docker ps >/dev/null 2>&1
+if [ $? -eq 1 ]
+then
+    echo -e "error: Docker is not currently running please start it before running this script"
+    exit 1
+else
+    echo -e ">   ${GREEN}ok${RESET}"
+fi
+
 echo -e "> checking for netcat binary"
 which nc > /dev/null
 if [ $? -eq 1 ]
 then
     echo -e ">   ${RED}not installed${RESET}"
-    echo ">      looks like we're running off a Pi, do you want to install netcat automatically?"
-    read_input_with_choices "y" "n"
-    if [ "$selection" == "y" ]
+    install_netcat=0
+    if [ "$architecture" == "_raspi64" ]
+    then
+        if [ $interactive -eq 1 ]
+        then
+            echo ">      looks like we're running off a Pi, do you want to install netcat automatically?"
+            read_input_with_choices "y" "n"
+            if [ "$selection" == "y" ]
+            then
+                install_netcat=1
+            else
+                echo -e "error: netcat is needed, please install it before running this script"
+                exit 1
+            fi
+        elif [ "$auto_install_netcat" == "true" ]
+        then
+            install_netcat=1
+        fi
+    fi
+
+    if [ $install_netcat -eq 1 ]
     then
         sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
         sudo DEBIAN_FRONTEND=noninteractive apt-get install netcat-traditional -y
@@ -116,9 +249,6 @@ then
             echo -e "error: looks like I was unable to install netcat automatically, please install it manually before running this script"
             exit 1
         fi
-    else
-        echo -e "error: netcat is needed, please install it before running this script"
-        exit 1
     fi
 else
     echo -e ">   ${GREEN}ok${RESET}"
@@ -129,45 +259,62 @@ then
     netcat_options=" -G 3 "
 fi
 
-echo -e "> creating openav Docker network"
+echo -e "> creating \"openav\" Docker network"
 $sudo_docker docker swarm init 2>/dev/null
 $sudo_docker docker network create -d overlay --attachable openav 2>/dev/null
 
-echo -e "> do you want to:"
-echo -e "    (${BOLD}1${RESET}) load a simple OpenAV stack with just enough to interact with a PJLink projector"
-echo -e "         use for dipping your toes into OpenAV"
-echo -e "    (${BOLD}2${RESET}) load a full OpenAV stack including all possible ${MAGENTA}microservices${RESET}"
-echo -e "         use if you already have configuration files defined"
-echo -e "         this will take a few more minutes to retrieve and instantiate everything, but you'll have the whole array device make & models supported by OpenAV available"
-echo -e "    (${BOLD}3${RESET}) load a full OpenAV stack, but pick and choose which microservices to load"
-echo -e "         same as 2. but you know which ${MAGENTA}microservices${RESET} you need"
+microservices="microservice-biamp-tesira-dsp \
+microservice-crestron-dm-switcher \
+microservice-global-cache \
+microservice-kramer-switcher \
+microservice-nec-display \
+microservice-pjlink \
+microservice-qsc-core-dsp \
+microservice-roku \
+microservice-rs232-extron \
+microservice-shure-dsp \
+microservice-sony-fpd \
+microservice-visca-ip \
+microservice-zoom-room-cli \
+microservice-zoom-room-sdk"
 
-read_input_with_choices "1" "2" "3"
-top_level_path_selection=$selection
+if [ $interactive -eq 1 ]
+then
+    echo -e "> do you want to:"
+    echo -e "    (${BOLD}1${RESET}) load a simple OpenAV stack with just enough to interact with a PJLink projector"
+    echo -e "         use for dipping your toes into OpenAV"
+    echo -e "    (${BOLD}2${RESET}) load a full OpenAV stack including all possible ${MAGENTA}microservices${RESET}"
+    echo -e "         use if you already have configuration files defined"
+    echo -e "         this will take a few more minutes to retrieve and instantiate everything, but you'll have the whole array device make & models supported by OpenAV available"
+    echo -e "    (${BOLD}3${RESET}) load a full OpenAV stack, but pick and choose which microservices to load"
+    echo -e "         same as 2. but you know which ${MAGENTA}microservices${RESET} you need"
 
-microservices="microservice-biamp-tesira-dsp microservice-crestron-dm-switcher microservice-global-cache microservice-kramer-switcher microservice-nec-display microservice-pjlink microservice-qsc-core-dsp microservice-roku microservice-rs232-extron microservice-shure-dsp microservice-sony-fpd microservice-visca-ip microservice-zoom-room-cli"
-if [ "$selection" == "1" ]
-then
-    microservices="microservice-pjlink"
-elif [ "$selection" == "3" ]
-then
-    echo -e "> ${MAGENTA}microservices${RESET}"
-    $new_microservices = ""
-    for microservice in $microservices
-    do
-        echo -e "> load ${MAGENTA}$microservice${RESET} ?"
-        read_input_with_choices "y" "n"
-        if [ "$selection" == "y" ]
-        then
-            new_microservices="${new_microservices} ${microservice}"
-        fi
-    done
-    microservices=$new_microservices
-else
-    for microservice in $microservices
-    do
-        echo -e "> ${MAGENTA}$microservice${RESET}"
-    done
+    read_input_with_choices "1" "2" "3"
+    top_level_path_selection=$selection
+
+    if [ "$selection" == "1" ]
+    then
+        microservices="microservice-pjlink"
+    elif [ "$selection" == "3" ]
+    then
+        echo -e "> ${MAGENTA}microservices${RESET}"
+        $new_microservices = ""
+        for microservice in $microservices
+        do
+            echo -e "> load ${MAGENTA}$microservice${RESET} ?"
+            read_input_with_choices "y" "n"
+            if [ "$selection" == "y" ]
+            then
+                new_microservices="${new_microservices} ${microservice}"
+            fi
+        done
+        microservices=$new_microservices
+    else
+        for microservice in $microservices
+        do
+            echo -e "> ${MAGENTA}$microservice${RESET}"
+        done
+    fi
 fi
 
 echo -e "> instantiating microservices"
@@ -185,32 +332,40 @@ done
 echo -e ""
 
 
-echo -e "> we need a directory to store config file(s) into"
-echo -e "    (${BOLD}1${RESET}) automatically create & use ~/OpenAV_system_configurations"
-echo -e "    (${BOLD}2${RESET}) enter an existing directory manually"
-read_input_with_choices "1" "2"
-if [ "$selection" == "1" ]
+if [ $interactive -eq 1 ]
 then
-    system_configs_folder=~/"OpenAV_system_configurations"
-    if [ ! -d ~/"OpenAV_system_configurations" ]
+    echo -e "> we need a directory to store config file(s) into"
+    echo -e "    (${BOLD}1${RESET}) automatically create & use ~/OpenAV_system_configurations"
+    echo -e "    (${BOLD}2${RESET}) enter an existing directory manually"
+    read_input_with_choices "1" "2"
+    if [ "$selection" == "1" ]
     then
-        echo -e "> creating system configuration directory ~/OpenAV_system_configurations"
-        mkdir ~/"OpenAV_system_configurations"
-        if [ $? -eq 1 ]
+        system_configs_folder=~/"OpenAV_system_configurations"
+        if [ ! -d ~/"OpenAV_system_configurations" ]
         then
-            echo -e "error: couldn't create directory ~/OpenAV_system_configurations, can't proceed further"
-            exit 1
+            echo -e "> creating system configuration directory ~/OpenAV_system_configurations"
+            mkdir ~/"OpenAV_system_configurations"
+            if [ $? -eq 1 ]
+            then
+                echo -e "error: couldn't create directory ~/OpenAV_system_configurations, can't proceed further"
+                exit 1
+            fi
         fi
-    fi
-elif [ "$selection" == "2" ]
-then
-    echo -e "> please enter the folder containing system configurations: (in MacOS you can drag & drop a folder on the terminal)"
-    read system_configs_folder
-    while [ ! -d $system_configs_folder ]
-    do
-        echo -e ">   error: ${system_configs_folder} doesn't exist or isn't a valid directory"
+    elif [ "$selection" == "2" ]
+    then
+        echo -e "> please enter the folder containing system configurations: (in MacOS you can drag & drop a folder on the terminal)"
         read system_configs_folder
-    done
+        while [ ! -d $system_configs_folder ]
+        do
+            echo -e ">   error: ${system_configs_folder} doesn't exist or isn't a valid directory"
+            read system_configs_folder
+        done
+    fi
+
+    orchestrator_deploy_args="-e DNS_HARD_CACHE=false \
+-e SYSTEM_CONFIGURATIONS_VIA_VOLUME=true \
+-e SYSTEM_CONFIGURATIONS_INSTANT_REFRESH=true \
+-v ${system_configs_folder}:/system_configurations"
 fi
 
 
@@ -230,16 +385,32 @@ done
 $sudo_docker docker run -tdi \
     --restart unless-stopped \
     -p $orchestrator_port:80 \
-    -e DNS_HARD_CACHE=false \
-    -e SYSTEM_CONFIGURATIONS_VIA_VOLUME=true \
-    -e SYSTEM_CONFIGURATIONS_INSTANT_REFRESH=true \
     -e ADDRESS_MICROSERVICES_BY_NAME=true \
-    -v $system_configs_folder:/system_configurations \
+    $orchestrator_deploy_args \
     --network openav \
     --network-alias orchestrator \
     --name orchestrator \
     ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
 $sudo_docker docker exec -ti orchestrator sh -c 'echo \* > /authorization.json'
+
+echo -e "> picking from available IPs for communication"
+ip=localhost
+if [ ! -z $SSH_CONNECTION ]
+then
+    ip=`echo $SSH_CONNECTION | cut -d" " -f3`
+else
+    hardware_nics=`ifconfig | grep 'flags=' | cut -d: -f1 | grep '^en\|^eth\|^wlan'`
+    for hardware_nic in $hardware_nics
+    do
+        potential_ip=`ifconfig $hardware_nic | grep inet | grep -v inet6 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | cut -d" " -f2 | sort -u`
+        echo -e ">  ${hardware_nic} ${potential_ip}"
+        if nc -z -w 3 $netcat_options $potential_ip $orchestrator_port 2>/dev/null
+        then
+            ip=$potential_ip
+            break
+        fi
+    done
+fi
 
 echo -e "> instantiating ${BLUE}UI${RESET}"
 $sudo_docker docker stop frontend-web > /dev/null 2>&1
@@ -257,7 +428,7 @@ done
 $sudo_docker docker run -tdi \
     --restart unless-stopped \
     -p $ui_port:80 \
-    -e HOME_ORCHESTRATOR=http://localhost:$orchestrator_port \
+    -e HOME_ORCHESTRATOR=http://$ip:$orchestrator_port \
     --network openav \
     --network-alias frontend-web \
     --name frontend-web \
@@ -270,7 +441,7 @@ then
 fi
 
 
-if [ "$top_level_path_selection" == "1" ]
+if [ $interactive -eq 1 -a "$top_level_path_selection" == "1" ]
 then
     echo -e "> what is the IP or FQDN of the projector you want to interact with?"
     read projector
@@ -310,14 +481,14 @@ then
         ],
         "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1",
         "method": "PUT",
-        "body": "1"
+        "body": "<inputnumber>"
       }
     ],
     "get": [
       "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/videoroute/1"
     ],
     "get_process": [
-      "1"
+      "<inputnumber>"
     ],
     "set_process": ""
   }
@@ -385,8 +556,11 @@ EOF
             # echo -e "   (${BOLD}n${RESET})o"
             read_input_with_choices "y" "n"
             want_to_define_another_input=$selection
-            echo -e "sleeping for 60 seconds before scanning projector again"
-            sleep 60
+            if [ "$want_to_define_another_input" == "y" ]
+            then
+                echo -e "sleeping for 60 seconds before scanning projector again"
+                sleep 60
+            fi
         done
     elif [ "$selection" == "2" ]
     then
@@ -477,7 +651,7 @@ EOF
               {
                 "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audiomute/1",
                 "method": "PUT",
-                "body": "\"\$PROGRAM_MUTE\"",
+                "body": "\"\$on_or_off\"",
                 "headers": [
                   "content-type: application/json"
                 ]
@@ -485,17 +659,17 @@ EOF
             ],
             "set_process": {
               "true": {
-                "PROGRAM_MUTE": "true"
+                "on_or_off": "on"
               },
               "false": {
-                "PROGRAM_MUTE": "false"
+                "on_or_off": "off"
               }
             },
             "get": [
               "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/audiomute/1"
             ],
             "get_process": [
-              "true"
+              "on"
             ]
           }
         },
@@ -505,7 +679,7 @@ EOF
             "value": {
                 "set": [
                     {
-                        "driver": "microservice-pjlink:current/$projectorcreds$projector/volume",
+                        "driver": "dartmouth-openav/microservice-pjlink:current/$projectorcreds$projector/volume",
                         "method": "PUT",
                         "body": "\"\$up_or_down\"",
                         "headers": [
@@ -531,8 +705,9 @@ EOF
 }
 EOF
 
-mv ~/"OpenAV_system_configurations/test_123.json.tmp" ~/"OpenAV_system_configurations/test_123.json"
+    mv ~/"OpenAV_system_configurations/test_123.json.tmp" ~/"OpenAV_system_configurations/test_123.json"
+    ui_url_get_params="?system=test_123"
 fi
 
-echo -e "> ${CYAN}orchestrator${RESET} available at: http://localhost:$orchestrator_port"
-echo -e "> ${BLUE}UI${RESET} available at: http://localhost$ui_port_if_not_80?system=test_123"
+echo -e "> ${CYAN}orchestrator${RESET} available at: http://${ip}:$orchestrator_port"
+echo -e "> ${BLUE}UI${RESET} available at: http://${ip}$ui_port_if_not_80${ui_url_get_params}"
