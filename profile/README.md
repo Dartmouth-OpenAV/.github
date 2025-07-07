@@ -12,4 +12,8 @@ For more information, check out our [wiki](https://github.com/Dartmouth-OpenAV/.
 
 This script instantiates OpenAV stack on your laptop, cloud server, Raspberry Pi or other. You'll need a terminal, Bash, and [Docker](https://docs.docker.com/engine/install/). It was tested on MacOS and a Raspberry Pi 4B.
 
+Instantiate the script with: `bash <(curl -s https://raw.githubusercontent.com/Dartmouth-OpenAV/.github/refs/heads/main/quickstart.sh)`, keep in mind that running scripts straight from a public remote source can be insecure.
+
+If you download the script to run manually, make sure you launch it within a bash shell. Either with `chmod u+x quickstart.sh && ./quickstart.sh` or with `bash quickstart.sh`.
+
 You can interact with it using the default UI it loads, or via the orchestrator's [collection of web requests](https://raw.githubusercontent.com/Dartmouth-OpenAV/orchestrator/refs/heads/main/orchestrator.collection.json) (with apps like Insomnia or Postman).
