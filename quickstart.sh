@@ -152,6 +152,7 @@ fi
 echo -e "> checking for docker binary"
 which docker > /dev/null
 if [ $? -eq 1 -a -f /Applications/Docker.app/Contents/Resources/bin/docker ]
+then
     export PATH=$PATH:/Applications/Docker.app/Contents/Resources/bin
 fi
 which docker > /dev/null
