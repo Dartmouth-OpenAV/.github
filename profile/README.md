@@ -17,3 +17,5 @@ Instantiate the script with: `bash <(curl -s https://raw.githubusercontent.com/D
 If you download the script to run manually, make sure you launch it within a bash shell. Either with `chmod u+x quickstart.sh && ./quickstart.sh` or with `bash quickstart.sh`.
 
 You can interact with it using the default UI it loads, or via the orchestrator's [collection of web requests](https://raw.githubusercontent.com/Dartmouth-OpenAV/orchestrator/refs/heads/main/orchestrator.collection.json) (with apps like Insomnia or Postman).
+
+If you use quickstart.sh with a PJLink projector, please make sure the projector has PJLink enabled and if the projector has a PJLink password (often the same as the admin password), please provide the password to quickstart.sh.
