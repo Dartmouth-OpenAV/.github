@@ -44,6 +44,7 @@ echo -e "       |_|                             "
 echo -e ""
 
 interactive=1
+mode="latest"
 orchestrator_deploy_args=""
 if [ ! -z "$1" ]
 then
@@ -57,7 +58,7 @@ then
             key="$1"
             case $key in
             *=*)
-                name="${key%=*}"
+                name="${key%%=*}"
                 value="${key#*=}"
                 eval "$name=\"$value\""
                 shift
@@ -97,14 +98,14 @@ then
             orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_TOKEN=${system_configs_github_token}"
         elif [ "$system_configs_method" == "github_app" ]
         then
-            if [ -z $system_configs_github_app_installation_id -o -z $system_configs_github_app_client_id -o -z $system_configs_github_app_pem ]
+            if [ -z "$system_configs_github_app_installation_id" -o -z "$system_configs_github_app_client_id" -o -z "$system_configs_github_app_pem" ]
             then
                 echo -e "error: need to specify \"system_configs_github_app_installation_id\", \"system_configs_github_app_client_id\", and \"system_configs_github_app_pem\" arguments when using system_configs_method of \"github_app\"" ;
                 exit 1
             fi
             orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_INSTALLATION_ID=${system_configs_github_app_installation_id}"
             orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_CLIENT_ID=${system_configs_github_app_client_id}"
-            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_PEM=${system_configs_github_app_pem }"
+            orchestrator_deploy_args+=" -e SYSTEM_CONFIGURATIONS_GITHUB_APP_PEM=${system_configs_github_app_pem}"
         else
             echo -e "error: need to specify \"system_configs_method\" argument, can be one of \"volume\", \"github_token\", or \"github_app\"" ;
             exit 1
@@ -113,7 +114,7 @@ then
         orchestrator_deploy_args+=" -e LOG_ERRORS=true"
         if [ "$log_to_splunk" == "true" ]
         then
-            if [ -z $log_to_splunk_url -o -z $log_to_splunk_key -o -z $log_to_splunk_index ]
+            if [ -z "$log_to_splunk_url" -o -z "$log_to_splunk_key" -o -z "$log_to_splunk_index" ]
             then
                 echo -e "error: need to specify \"system_configs_github_app_installation_id\", \"log_to_splunk_key\", and \"log_to_splunk_index\" arguments when log_to_splunk is \"true\"" ;
                 exit 1
@@ -268,7 +269,8 @@ echo -e "> creating \"openav\" Docker network"
 $sudo_docker docker swarm init 2>/dev/null
 $sudo_docker docker network create -d overlay --attachable openav 2>/dev/null
 
-microservices="microservice-biamp-tesira-dsp \
+microservices="microservice-autoshutdown \
+microservice-biamp-tesira-dsp \
 microservice-crestron-dm-switcher \
 microservice-global-cache \
 microservice-kramer-switcher \
@@ -303,7 +305,7 @@ then
     elif [ "$selection" == "3" ]
     then
         echo -e "> ${MAGENTA}microservices${RESET}"
-        $new_microservices = ""
+        new_microservices=""
         for microservice in $microservices
         do
             echo -e "> load ${MAGENTA}$microservice${RESET} ?"
@@ -330,8 +332,8 @@ do
     echo -en "\033[2K\033[1G   ${i}/${count} ${MAGENTA}$microservice${RESET} ..."
     $sudo_docker docker stop $microservice > /dev/null 2>&1
     $sudo_docker docker rm $microservice > /dev/null 2>&1
-    $sudo_docker docker pull ghcr.io/dartmouth-openav/$microservice:production$architecture > /dev/null 2>&1
-    $sudo_docker docker run -tdi --restart unless-stopped --network openav --network-alias $microservice --name $microservice `$sudo_docker docker inspect --format '{{ index .Config.Labels "CONTAINER_LAUNCH_EXTRA_PARAMETERS"}}' ghcr.io/dartmouth-openav/$microservice:production$architecture` ghcr.io/dartmouth-openav/$microservice:production$architecture > /dev/null 2>&1
+    $sudo_docker docker pull ghcr.io/dartmouth-openav/$microservice:${mode}$architecture > /dev/null 2>&1
+    $sudo_docker docker run -tdi --restart unless-stopped --network openav --network-alias $microservice --name $microservice `$sudo_docker docker inspect --format '{{ index .Config.Labels "CONTAINER_LAUNCH_EXTRA_PARAMETERS"}}' ghcr.io/dartmouth-openav/$microservice:${mode}$architecture` ghcr.io/dartmouth-openav/$microservice:${mode}$architecture > /dev/null 2>&1
     i=$((i+1))
 done
 echo -e ""
@@ -377,7 +379,7 @@ fi
 echo -e "> instantiating ${CYAN}orchestrator${RESET}"
 $sudo_docker docker stop orchestrator > /dev/null 2>&1
 $sudo_docker docker rm orchestrator > /dev/null 2>&1
-$sudo_docker docker pull ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
+$sudo_docker docker pull ghcr.io/dartmouth-openav/orchestrator:${mode}$architecture > /dev/null 2>&1
 echo -e ">   finding available port"
 for orchestrator_port in $(seq 81 65535)
 do
@@ -395,7 +397,7 @@ $sudo_docker docker run -tdi \
     --network openav \
     --network-alias orchestrator \
     --name orchestrator \
-    ghcr.io/dartmouth-openav/orchestrator:production$architecture > /dev/null 2>&1
+    ghcr.io/dartmouth-openav/orchestrator:${mode}$architecture > /dev/null 2>&1
 $sudo_docker docker exec -ti orchestrator sh -c 'echo \* > /authorization.json'
 
 echo -e "> picking from available IPs for communication"
@@ -420,7 +422,7 @@ fi
 echo -e "> instantiating ${BLUE}UI${RESET}"
 $sudo_docker docker stop frontend-web > /dev/null 2>&1
 $sudo_docker docker rm frontend-web > /dev/null 2>&1
-$sudo_docker docker pull ghcr.io/dartmouth-openav/frontend-web:production$architecture > /dev/null 2>&1
+$sudo_docker docker pull ghcr.io/dartmouth-openav/frontend-web:${mode}$architecture > /dev/null 2>&1
 echo -e ">   finding available port"
 for ui_port in $(seq 80 65535)
 do
@@ -437,7 +439,7 @@ $sudo_docker docker run -tdi \
     --network openav \
     --network-alias frontend-web \
     --name frontend-web \
-    ghcr.io/dartmouth-openav/frontend-web:production$architecture > /dev/null 2>&1
+    ghcr.io/dartmouth-openav/frontend-web:${mode}$architecture > /dev/null 2>&1
 
 ui_port_if_not_80=""
 if [ "$ui_port" != "80" ]
