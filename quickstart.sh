@@ -44,7 +44,7 @@ echo -e "       |_|                             "
 echo -e ""
 
 interactive=1
-mode="latest"
+mode="production"
 orchestrator_deploy_args=""
 if [ ! -z "$1" ]
 then
