@@ -435,7 +435,7 @@ done
 $sudo_docker docker run -tdi \
     --restart unless-stopped \
     -p $ui_port:80 \
-    -e HOME_ORCHESTRATOR=http://$ip:$orchestrator_port \
+    -e DEFAULT_ORCHESTRATOR=http://$ip:$orchestrator_port \
     --network openav \
     --network-alias frontend-web \
     --name frontend-web \
