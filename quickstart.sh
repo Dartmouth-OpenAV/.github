@@ -267,7 +267,7 @@ fi
 
 echo -e "> creating \"openav\" Docker network"
 $sudo_docker docker swarm init 2>/dev/null
-$sudo_docker docker network create -d overlay --attachable openav 2>/dev/null
+$sudo_docker docker network create --attachable openav 2>/dev/null
 
 microservices="microservice-autoshutdown \
 microservice-biamp-tesira-dsp \
